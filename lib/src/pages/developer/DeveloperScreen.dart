@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mawaqit/i18n/l10n.dart';
 import 'package:mawaqit/src/developer_mode/AnnouncementTest.dart';
 import 'package:mawaqit/src/helpers/AppRouter.dart';
@@ -22,16 +23,85 @@ import 'package:mawaqit/src/pages/home/sub_screens/JumuaHadithSubScreen.dart';
 import 'package:mawaqit/src/pages/home/sub_screens/RandomHadithScreen.dart';
 import 'package:mawaqit/src/pages/home/sub_screens/fajr_wake_up_screen.dart';
 import 'package:mawaqit/src/pages/home/sub_screens/normal_home.dart';
+import 'package:mawaqit/src/pages/home/widgets/workflows/repeating_workflow_widget.dart';
 import 'package:mawaqit/src/services/mosque_manager.dart';
 import 'package:mawaqit/src/services/theme_manager.dart';
 import 'package:mawaqit/src/services/user_preferences_manager.dart';
-import 'package:provider/provider.dart';
+import 'package:mawaqit/src/state_management/random_hadith/random_hadith_notifier.dart';
+import 'package:provider/provider.dart' as provider_pkg;
+import 'package:mawaqit/i18n/AppLanguage.dart';
 
 import '../../../main.dart';
 
 typedef ForcedScreen = ({WidgetBuilder builder, String name});
 
 typedef TestMosque = ({String name, String uuid});
+
+const _HadithRepeatDuration = Duration(minutes: 4);
+
+/// Debug wrapper for RandomHadithScreen that includes the 4-minute timing mechanism
+class DebugRandomHadithWrapper extends ConsumerStatefulWidget {
+  const DebugRandomHadithWrapper({Key? key}) : super(key: key);
+
+  @override
+  ConsumerState<DebugRandomHadithWrapper> createState() => _DebugRandomHadithWrapperState();
+}
+
+class _DebugRandomHadithWrapperState extends ConsumerState<DebugRandomHadithWrapper> {
+  Timer? _hadithRefreshTimer;
+  Widget _currentWidget = Container();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
+      _startHadithFlow();
+    });
+  }
+
+  void _startHadithFlow() {
+    // Show RandomHadithScreen immediately
+    _showRandomHadith();
+
+    // Set up timer to refresh hadith content every 4 minutes (like in production RepeatingWorkflowItem)
+    _hadithRefreshTimer = Timer.periodic(_HadithRepeatDuration, (timer) {
+      if (mounted) {
+        _refreshHadithContent();
+      }
+    });
+  }
+
+  void _showRandomHadith() {
+    if (mounted) {
+      setState(() {
+        _currentWidget = RandomHadithScreen(
+          onDone: () {
+            // onDone callback - matches behavior in normal workflow
+          },
+        );
+      });
+    }
+  }
+
+  void _refreshHadithContent() {
+    if (mounted) {
+      final hadith = provider_pkg.Provider.of<AppLanguage>(context, listen: false).hadithLanguage;
+      final language = hadith.isEmpty ? 'ar' : hadith;
+      ref.read(randomHadithNotifierProvider.notifier).getRandomHadith(language: language);
+    }
+  }
+
+  @override
+  void dispose() {
+    _hadithRefreshTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _currentWidget;
+  }
+}
 
 /// this screen made to speed up the development process
 /// user can force to use specific screen
@@ -57,11 +127,11 @@ class _DeveloperScreenState extends State<DeveloperScreen> {
   List<ForcedScreen> get screens => [
         (builder: (context) => NormalHomeSubScreen(), name: S.current.normalScreen),
         (builder: (context) => AnnouncementTest(), name: S.current.announcement),
-        (builder: (context) => RandomHadithScreen(), name: S.current.randomHadith),
+        (builder: (context) => DebugRandomHadithWrapper(), name: S.current.randomHadith),
         (builder: (context) => AdhanSubScreen(), name: S.current.alAdhan),
         (builder: (context) => AfterAdhanSubScreen(), name: S.current.afterAdhanHadith),
         (builder: (context) => DuaaBetweenAdhanAndIqamaaScreen(), name: S.current.duaaRemainder),
-        (builder: (context) => IqamaaCountDownSubScreen(), name: S.current.iqamaaCountDown),
+        (builder: (context) => IqamaaCountDownSubScreen(isDebug: true), name: S.current.iqamaaCountDown),
         (builder: (context) => IqamaSubScreen(), name: S.current.iqama),
         (builder: (context) => AfterSalahAzkar(), name: S.current.afterSalahAzkar),
         (builder: (context) => JumuaHadithSubScreen(), name: S.current.jumua),
@@ -72,26 +142,35 @@ class _DeveloperScreenState extends State<DeveloperScreen> {
 
   forceScreen(ForcedScreen e) {
     cancelWalkThrowScreens();
-    setState(() {
-      forcedScreen = e;
-    });
+    if (mounted) {
+      setState(() {
+        forcedScreen = e;
+      });
+    }
   }
 
   void cancelWalkThrowScreens() {
     walkThrowScreensSubscription?.cancel();
-    setState(() {
+    if (mounted) {
+      setState(() {
+        walkThrowScreensSubscription = null;
+        forcedScreen = null; // clear the forcedScreen when canceling the walkthrough
+      });
+    } else {
+      // If widget is not mounted, just clean up without setState
       walkThrowScreensSubscription = null;
-      forcedScreen = null; // clear the forcedScreen when canceling the walkthrough
-    });
+      forcedScreen = null;
+    }
   }
 
   void walkThrowScreens() {
     walkThrowScreensSubscription?.cancel();
-    walkThrowScreensSubscription = generateStream(10.seconds).listen((event) {
-      if (event > screens.length) walkThrowScreensSubscription?.cancel();
-      setState(() {
-        forcedScreen = screens[event % screens.length];
-      });
+    walkThrowScreensSubscription = generateStream(15.seconds).listen((event) {
+      if (mounted) {
+        setState(() {
+          forcedScreen = screens[event % screens.length];
+        });
+      }
     });
   }
 
@@ -108,7 +187,8 @@ class _DeveloperScreenState extends State<DeveloperScreen> {
 
   @override
   void dispose() {
-    cancelWalkThrowScreens();
+    // Just cancel the subscription without updating UI state since widget is being destroyed
+    walkThrowScreensSubscription?.cancel();
     super.dispose();
   }
 
@@ -155,7 +235,7 @@ class _DeveloperScreenState extends State<DeveloperScreen> {
               onSelect: () => AppRouter.push(LanguageScreen()),
             ),
             SelectorOption(
-              title: "Walk through screens",
+              title: "Walkthrough screens",
               onSelect: walkThrowScreens,
             ),
             SelectorOption(

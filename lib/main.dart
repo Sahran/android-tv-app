@@ -8,11 +8,16 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
-import 'package:flutter_kurdish_localization/flutter_kurdish_localization.dart';
+import 'package:flutter_kurdish_localization/kurdish_cupertino_localization_delegate.dart';
+import 'package:flutter_kurdish_localization/kurdish_material_localization_delegate.dart';
+import 'package:flutter_kurdish_localization/kurdish_widget_localization_delegate.dart';
+
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart' as riverpod;
 import 'package:hive_flutter/adapters.dart';
 import 'package:logger/logger.dart';
+import 'package:mawaqit/firebase_options.dart';
+
 import 'package:mawaqit/i18n/AppLanguage.dart';
 import 'package:mawaqit/i18n/l10n.dart';
 import 'package:mawaqit/src/const/constants.dart';
@@ -39,11 +44,15 @@ import 'package:mawaqit/src/services/user_preferences_manager.dart';
 import 'package:mawaqit/src/services/background_work_managers/work_manager_services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:sizer/sizer.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:mawaqit/src/routes/route_generator.dart';
+
 import 'package:montenegrin_localization/montenegrin_localization.dart';
+import 'package:flutter_kurdish_localization/flutter_kurdish_localization.dart';
 
 final logger = Logger();
 
@@ -52,14 +61,24 @@ bool _isAppInForeground = false;
 
 @pragma("vm:entry-point")
 Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
   await CrashlyticsWrapper.init(
     () async {
       try {
-        WidgetsFlutterBinding.ensureInitialized();
-        await Firebase.initializeApp();
+        final firebaseOptions = FirebaseOptions(
+          apiKey: const String.fromEnvironment('mawaqit.firebase.api_key'),
+          appId: const String.fromEnvironment('mawaqit.firebase.app_id'),
+          messagingSenderId: const String.fromEnvironment('mawaqit.firebase.messaging_sender_id'),
+          projectId: const String.fromEnvironment('mawaqit.firebase.project_id'),
+          storageBucket: const String.fromEnvironment('mawaqit.firebase.storage_bucket'),
+        );
+
+        await Firebase.initializeApp(
+          options: firebaseOptions,
+        );
 
         final directory = await getApplicationDocumentsDirectory();
-
         Hive.init(directory.path);
         await FastCachedImageConfig.init(subDir: directory.path, clearCacheAfter: const Duration(days: 60));
 
@@ -111,14 +130,6 @@ Future<void> _safelyInitializeBackgroundServices() async {
 
     developer.log('Starting background services initialization');
 
-    // Initialize permissions using the PermissionsManager
-    try {
-      await PermissionsManager.initializePermissions();
-      developer.log('Permissions initialized successfully');
-    } catch (e) {
-      developer.log('Permissions initialization error', error: e);
-    }
-
     try {
       await WorkManagerService.initialize();
       developer.log('WorkManagerService initialized successfully');
@@ -147,6 +158,8 @@ class MyApp extends riverpod.ConsumerStatefulWidget {
 }
 
 class _MyAppState extends riverpod.ConsumerState<MyApp> with WidgetsBindingObserver {
+  bool _shouldUseBackgroundServices = false;
+
   @override
   void initState() {
     super.initState();
@@ -162,8 +175,17 @@ class _MyAppState extends riverpod.ConsumerState<MyApp> with WidgetsBindingObser
     // Wait to ensure app is in foreground
     await Future.delayed(const Duration(seconds: 3));
 
+    // Check once and store the result
+    _shouldUseBackgroundServices = await PermissionsManager.shouldAutoInitializePermissions();
+
     _isAppInForeground = true;
-    await _safelyInitializeBackgroundServices();
+
+    // Only initialize if we should use background services
+    if (_shouldUseBackgroundServices) {
+      await _safelyInitializeBackgroundServices();
+    } else {
+      developer.log('Background services disabled - device is not rooted');
+    }
   }
 
   @override
@@ -177,11 +199,13 @@ class _MyAppState extends riverpod.ConsumerState<MyApp> with WidgetsBindingObser
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _isAppInForeground = state == AppLifecycleState.resumed;
 
-    // Only call this if service is initialized
-    try {
-      UnifiedBackgroundService().didChangeAppLifecycleState(state);
-    } catch (e) {
-      // Ignore errors if service not initialized
+    // Only notify background service if it was initialized (rooted devices only)
+    if (_shouldUseBackgroundServices) {
+      try {
+        UnifiedBackgroundService().didChangeAppLifecycleState(state);
+      } catch (e) {
+        developer.log('Error notifying background service of lifecycle change', error: e);
+      }
     }
   }
 
@@ -212,37 +236,40 @@ class _MyAppState extends riverpod.ConsumerState<MyApp> with WidgetsBindingObser
               builder: (context, theme, _) {
                 return Shortcuts(
                   shortcuts: {SingleActivator(LogicalKeyboardKey.select): ActivateIntent()},
-                  child: MaterialApp(
-                    title: kAppName,
-                    themeMode: theme.mode,
-                    localeResolutionCallback: (locale, supportedLocales) {
-                      if (locale?.languageCode.toLowerCase() == 'ba') return Locale('en');
+                  child: SentryWidget(
+                    child: MaterialApp(
+                      title: kAppName,
+                      themeMode: theme.mode,
+                      localeResolutionCallback: (locale, supportedLocales) {
+                        if (locale?.languageCode.toLowerCase() == 'ba' || locale?.languageCode.toLowerCase() == 'ff')
+                          return Locale('en');
 
-                      return locale;
-                    },
-                    theme: theme.lightTheme,
-                    darkTheme: theme.darkTheme,
-                    locale: model.appLocal,
-                    navigatorKey: AppRouter.navigationKey,
-                    navigatorObservers: [
-                      AnalyticsWrapper.observer(),
-                    ],
-                    localizationsDelegates: [
-                      MontenegrinMaterialLocalizations.delegate,
-                      MontenegrinWidgetsLocalizations.delegate,
-                      MontenegrinCupertinoLocalizations.delegate,
-                      S.delegate,
-                      GlobalCupertinoLocalizations.delegate,
-                      GlobalMaterialLocalizations.delegate,
-                      GlobalWidgetsLocalizations.delegate,
-                      KurdishMaterialLocalizations.delegate,
-                      KurdishWidgetLocalizations.delegate,
-                      KurdishCupertinoLocalizations.delegate
-                    ],
-                    supportedLocales: S.supportedLocales,
-                    debugShowCheckedModeBanner: false,
-                    onGenerateRoute: RouteGenerator.generateRoute,
-                    home: Splash(),
+                        return locale;
+                      },
+                      theme: theme.lightTheme,
+                      darkTheme: theme.darkTheme,
+                      locale: model.appLocal,
+                      navigatorKey: AppRouter.navigationKey,
+                      navigatorObservers: [
+                        AnalyticsWrapper.observer(),
+                      ],
+                      localizationsDelegates: [
+                        MontenegrinMaterialLocalizations.delegate,
+                        MontenegrinWidgetsLocalizations.delegate,
+                        MontenegrinCupertinoLocalizations.delegate,
+                        S.delegate,
+                        GlobalCupertinoLocalizations.delegate,
+                        GlobalMaterialLocalizations.delegate,
+                        GlobalWidgetsLocalizations.delegate,
+                        KurdishMaterialLocalizations.delegate,
+                        KurdishWidgetLocalizations.delegate,
+                        KurdishCupertinoLocalizations.delegate,
+                      ],
+                      supportedLocales: S.supportedLocales,
+                      debugShowCheckedModeBanner: false,
+                      onGenerateRoute: RouteGenerator.generateRoute,
+                      home: Splash(),
+                    ),
                   ),
                 );
               },

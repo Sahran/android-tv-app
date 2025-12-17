@@ -5,6 +5,7 @@ import 'package:mawaqit/i18n/l10n.dart';
 
 import 'package:mawaqit/src/domain/error/quran_exceptions.dart';
 import 'package:mawaqit/src/domain/model/quran/moshaf_type_model.dart';
+import 'package:mawaqit/src/routes/routes_constant.dart';
 import 'package:mawaqit/src/state_management/quran/download_quran/download_quran_notifier.dart';
 import 'package:mawaqit/src/state_management/quran/download_quran/download_quran_state.dart';
 import 'package:mawaqit/src/state_management/quran/reading/moshaf_type_notifier.dart';
@@ -121,7 +122,11 @@ class _DownloadQuranDialogState extends ConsumerState<DownloadQuranDialog> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            LinearProgressIndicator(value: state.progress / 100),
+            LinearProgressIndicator(
+              value: state.progress / 100,
+              color: Colors.white,
+              backgroundColor: Colors.black,
+            ),
             SizedBox(height: 16),
             Text('${state.progress.toStringAsFixed(2)}%'),
           ],
@@ -169,7 +174,11 @@ class _DownloadQuranDialogState extends ConsumerState<DownloadQuranDialog> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            LinearProgressIndicator(value: state.progress / 100),
+            LinearProgressIndicator(
+              value: state.progress / 100,
+              color: Colors.white,
+              backgroundColor: Colors.black,
+            ),
             SizedBox(height: 16),
             Text('${state.progress.toStringAsFixed(2)}%'),
           ],
@@ -218,7 +227,7 @@ class _DownloadQuranDialogState extends ConsumerState<DownloadQuranDialog> {
               moshafType.when(
                 data: (data) {
                   if (data.isFirstTime) {
-                    Navigator.popUntil(context, (route) => route.isFirst);
+                    Navigator.pushNamedAndRemoveUntil(context, Routes.quranModeSelection, (route) => route.isFirst);
                   } else {
                     Navigator.pop(context);
                   }
