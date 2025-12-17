@@ -446,4 +446,19 @@
   },
   "scheduleInOnlineMode": "قۇرئان ئاڭلاشنى كۈنتەرتىپكە تىزىشتا ئىنتېرنېتقا باغلاڭ",
   "duaBetweenAdhanIqamah": "ئەزان بىلەن تەكبىر ئارىسىدىكى دۇئانى رەت قىلمايدۇ."
+  "duaBetweenAdhanIqamah": "ئەزان بىلەن تەكبىر ئارىسىدىكى دۇئانى رەت قىلمايدۇ.",
+  "processingRequest": "ئىلتىماسنى بىر تەرەپ قىلىۋاتىدۇ…",
+  "loadingStream": "ئېقىمنى يۈكلەۋاتىدۇ…",
+  "rtspUrlHint": "RTSP ياكى Youtube ئۇلانمىسى كىرگۈزۈلىدۇ",
+  "replaceWorkflowWithStream": "كامېرا ئېقىمىنى ئۆزلۈكىدىن كۆرسىتىدۇ",
+  "replaceAppWorkflowWithCameraStream": "كامېرا خاتىرىلەشكە باشلىغان ھامان ئېكران كامېرا سىن ئېقىمىنى ئۆزلۈكىدىن كۆرسىتىدۇ؛ ئەگەر توختاپ قالسا، ئېكران ناماز ۋاقتىنى كۆرسىتىش ئېكرانىغا قايتىدۇ",
+  "streamError": "ئېقىم تارقىتىۋاتقاندا خاتالىق كۆرۈلدى",
+  "finish": "تامام",
+  "schedulingAlarms":"ۋاقىت كۈنتەرتىپى ئوچۇق/تاقاق…",
+  "alarmsSucessSchedule":"ئوچۇق/تاقاق قوزغاتقۇچ كۈنتەرتىپكە مۇۋەپپەقىيەتلىك قوشۇلدى",
+  "alarmsScheduleFailure":"ئوچۇق/تاقاق قوزغاتقۇچ كۈنتەرتىپكە قوشالمىدى",
+  "prayerTimeNotificationTitle":"ناماز ۋاقتى ئۇقتۇرۇشى",
+  "prayerTimeNotificationDesc":"ئەپ تاقالغان تەقدىردىمۇ، ناماز ۋاقتىدا ئەزاننى ياڭرىتىدۇ",
+  "enablePrayerReminders":"ناماز ئەسكەرتىشىنى قوزغىتىدۇ",
+  "enablePrayerRemindersDesc":"ئارقا سۇپىدا ئۆزلۈكىدىن ئىشلەيدۇ"
 }
